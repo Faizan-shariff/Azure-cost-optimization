@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "COSMOS_DB_URI": "<your-cosmos-uri>",
+    "COSMOS_DB_KEY": "<your-cosmos-key>",
+    "COSMOS_DB_NAME": "billingdb",
+    "COSMOS_DB_CONTAINER": "records",
+    "BLOB_STORAGE_CONN": "<your-blob-connection-string>",
+    "BLOB_CONTAINER_NAME": "billing-archive"
+  }
+}
