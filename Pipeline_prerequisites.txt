@@ -1,0 +1,30 @@
+-> Azure DevOps Pipeline Goals
+We'll set up two-stage pipeline:
+
+- Infrastructure Deployment – Uses Terraform to provision Azure resources.
+- Function App Deployment – Deploys Azure Function to the provisioned app.
+
+-> Please verify or adjust accordingly:
+
+- You have a Service Connection named azure-service-connection with access to your Azure subscription.
+- You’re using a Linux agent (Microsoft-hosted or self-hosted).
+
+-> Required Terraform Environment Variables
+Ensure you define these as pipeline variables or secrets (if not using federated workload identity):
+- servicePrincipalId
+- servicePrincipalKey
+- subscriptionId
+- tenantId
+
+-> Optional: Add Pipeline Environment
+- To make it even safer, consider using an Azure DevOps Environment for infra approval gates.
+
+-> Deployment Flow Summary
+Terraform Stage provisions:
+- Resource Group
+- Cosmos DB
+- Storage Account
+- Container
+
+Function Stage packages and publishes the Azure Function
+
