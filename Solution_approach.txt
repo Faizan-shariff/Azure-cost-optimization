@@ -1,0 +1,112 @@
+-> Problem Recap
+System: Azure Serverless Architecture
+Storage: Azure Cosmos DB
+Record Volume: 2M+ records (300 KB each)
+Challenge: Costs are rising due to infrequently accessed records older than 3 months
+
+-> Constraints:
+- No API contract changes
+- No downtime or data loss
+- Simple to implement and maintain
+
+-> Proposed Cost Optimization Strategy
+- Hot vs Cold Data Separation
+Hot Data (< 3 months) → Remain in Azure Cosmos DB
+Cold Data (≥ 3 months) → Archived to Azure Blob Storage
+
+This reduces Cosmos DB storage and RU/s costs significantly by offloading infrequent reads.
+
+-> Key Solution Components
+Component ->	Purpose
+Azure Cosmos DB	- Store recent billing records
+Azure Blob Storage - Store archived (cold) records
+Azure Function (Timer) - Move old records from Cosmos DB to Blob
+Terraform - IaC	Provision all Azure resources
+Optional API Layer (internal)	- Enables reads from Blob if record is missing in Cosmos DB
+
+-> Folder Structure Provided
+Azure-cost-optimization/
+├── ArchiveOldRecords/         # Azure Function code
+│   ├── __init__.py            # Core archival logic
+│   ├── function.json          # Timer trigger (runs daily)
+│   ├── requirements.txt       # Python dependencies
+│   └── local.settings.json    # Env variables (to be filled)
+├── infra/                     # Terraform infrastructure
+│   ├── main.tf                # Cosmos, Blob, RG, etc.
+│   ├── variables.tf           # Location input
+│   └── outputs.tf             # Outputs for function config
+
+-> Workflow Overview
+1. Azure Function Timer Trigger
+- Runs daily (via CRON: 0 0 0 * * *)
+- Queries Cosmos DB for records older than 90 days
+- Uploads them to Blob Storage (as JSON)
+- Deletes them from Cosmos DB
+
+2. Blob Storage Lifecycle Policy (optional)
+- Moves old blobs to Cool or Archive tiers for further cost reduction
+- Read Handling (optional logic inside API)
+- Try Cosmos DB first
+- If record not found → fallback to Blob → return response
+"""
+def get_billing_record(billing_id):
+    try:
+        return cosmos_db.get_item(billing_id)
+    except ItemNotFound:
+        blob_data = blob_storage.read_blob(f"{billing_id}.json")
+        return json.loads(blob_data)
+"""
+
+
+-> Terraform Infrastructure Provisions
+- Azure Resource Group
+- Azure Cosmos DB Account, Database, Container
+- Azure Storage Account and billing-archive container
+- You deploy it using:
+"""
+cd /infra
+terraform init
+terraform apply
+"""
+
+-> Deployment Steps
+- Provision infra via Terraform
+- Copy output values (Cosmos endpoint, keys, etc.)
+- Add them to local.settings.json
+- Deploy Function:
+"""
+func azure functionapp publish <your-app-name>
+"""
+
+-> Cost Benefits:
+Layer -->	Before --> After
+- Cosmos DB	- Expensive for all data - Reduced to recent records only
+- Blob Storage	- N/A	- Cold storage at ~90% lower cost
+- Query Cost	- High on old data	- Nearly zero for archived data
+
+-> Bonus Capabilities:
+Easily extendable to add:
+- Change feed-based archival (for event-driven)
+- Blob rehydration or caching layer
+- Auto-tiering for long-term blob storage
+"""
+Auto-tier archived blobs from Hot → Cool → Archive over time
+{
+  "rules": [
+    {
+      "enabled": true,
+      "name": "MoveOldBlobs",
+      "type": "Lifecycle",
+      "definition": {
+        "actions": {
+          "baseBlob": {
+            "tierToCool": { "daysAfterModificationGreaterThan": 30 },
+            "tierToArchive": { "daysAfterModificationGreaterThan": 90 }
+          }
+        },
+        "filters": { "blobTypes": [ "blockBlob" ] }
+      }
+    }
+  ]
+}
+"""
