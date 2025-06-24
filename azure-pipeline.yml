@@ -1,0 +1,72 @@
+trigger:
+  branches:
+    include:
+      - main
+
+variables:
+  azureServiceConnection: 'azure-service-connection'
+  functionAppName: 'billing-archive-funcapp'
+  functionAppResourceGroup: 'billing-archive-rg'
+  storageAccountName: 'billingarchivest'
+  location: 'East US'
+
+stages:
+# ------------------------
+- stage: DeployInfrastructure
+  displayName: "Terraform - Deploy Infra"
+  jobs:
+    - job: Terraform
+      displayName: "Terraform Init & Apply"
+      pool:
+        vmImage: ubuntu-latest
+      steps:
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '3.x'
+
+        - task: TerraformInstaller@1
+          inputs:
+            terraformVersion: 'latest'
+
+        - script: |
+            cd /infra
+            terraform init
+          displayName: 'Terraform Init'
+
+        - script: |
+            cd /infra
+            terraform apply -auto-approve
+          displayName: 'Terraform Apply'
+          env:
+            ARM_CLIENT_ID: $(servicePrincipalId)
+            ARM_CLIENT_SECRET: $(servicePrincipalKey)
+            ARM_SUBSCRIPTION_ID: $(subscriptionId)
+            ARM_TENANT_ID: $(tenantId)
+
+# ------------------------
+- stage: DeployFunction
+  displayName: "Deploy Azure Function"
+  dependsOn: DeployInfrastructure
+  jobs:
+    - job: DeployFunc
+      displayName: "Deploy Archive Function"
+      pool:
+        vmImage: ubuntu-latest
+      steps:
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '3.x'
+
+        - task: ArchiveFiles@2
+          inputs:
+            rootFolderOrFile: 'ArchiveOldRecords'
+            includeRootFolder: false
+            archiveType: 'zip'
+            archiveFile: '$(Build.ArtifactStagingDirectory)/functionapp.zip'
+
+        - task: AzureFunctionApp@2
+          inputs:
+            azureSubscription: $(azureServiceConnection)
+            appType: functionAppLinux
+            appName: $(functionAppName)
+            package: '$(Build.ArtifactStagingDirectory)/functionapp.zip'
